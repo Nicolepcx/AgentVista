@@ -11,6 +11,9 @@
   <a href="https://huggingface.co/datasets/Warrieryes/AgentVista">
     <img src="https://img.shields.io/badge/AgentVista_Dataset-fcd022?style=for-the-badge&logo=huggingface&logoColor=000" alt="Hugging Face">
   </a>
+  <a href="https://agentvista-bench.github.io/">
+    <img src="https://img.shields.io/badge/Webpage-blue?style=for-the-badge&logo=googlechrome&logoColor=white" alt="Webpage">
+  </a>
 </div>
 
 
