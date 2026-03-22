@@ -5,6 +5,17 @@ import os
 import time
 import openai
 
+
+def _normalize_openai_base_url(endpoint: str) -> str:
+    """OpenAI SDK appends /chat/completions; strip it if env uses a full chat URL (matches api_caller / OpenRouter notebooks)."""
+    if not endpoint:
+        return endpoint
+    e = endpoint.rstrip("/")
+    suffix = "/chat/completions"
+    if e.lower().endswith(suffix):
+        return e[: -len(suffix)]
+    return e
+
 SYSTEM_PROMPT = (
     "You are an intelligent chatbot designed for evaluating the correctness of generative outputs "
     "for question-answer pairs. Compare the predicted answer with the correct answer and determine "
@@ -28,7 +39,8 @@ class GPT4VisionClient:
         self.api_key = os.environ.get("VERIFIER_API_KEY")
         self.end_point = os.environ.get("VERIFIER_END_POINT")
         self.model_name = os.environ.get("VERIFIER_MODEL_NAME", "gpt-4o")
-        self.client = openai.OpenAI(base_url=self.end_point, api_key=self.api_key)
+        base = _normalize_openai_base_url(self.end_point)
+        self.client = openai.OpenAI(base_url=base, api_key=self.api_key)
 
     def query(self, prompt: str, system_prompt: str = None, max_retries=5, initial_delay=3):
         messages = []
@@ -55,15 +67,34 @@ class GPT4VisionClient:
         return "", ""
 
 
-def compute_score(prompt: str, predict_str_list: list, ground_truth, extra_info: dict = None):
+def _prediction_text_for_verifier(predict_str_list: list, extra: dict, final_answer: str = None) -> str:
+    """
+    Text sent to the LLM judge. Prefer the harness final_answer (parsed model output); otherwise
+    <answer>...</answer> tags in the transcript, else last assistant turn (legacy).
+    """
+    if final_answer is not None and str(final_answer).strip():
+        return str(final_answer).strip()
+    joined = " ".join(predict_str_list)
+    if extra.get("gpt_extract_answer") and extra.get("extract_answer_tags") == "strict":
+        matches = re.findall(r"<answer>\s*(.*?)\s*</answer>", joined, re.DOTALL)
+        if matches:
+            return matches[-1].strip()
+        return predict_str_list[-1].strip() if predict_str_list else ""
+    return joined.strip() if joined else (predict_str_list[-1].strip() if predict_str_list else "")
+
+
+def compute_score(
+    prompt: str,
+    predict_str_list: list,
+    ground_truth,
+    extra_info: dict = None,
+    final_answer: str = None,
+):
     """Return (accuracy_score, analysis). Uses verifier API if VERIFIER_API_KEY and VERIFIER_END_POINT are set."""
     extra = extra_info or {}
     if not os.environ.get("VERIFIER_API_KEY") or not os.environ.get("VERIFIER_END_POINT"):
         return 0.0, "Verifier not configured (set VERIFIER_API_KEY and VERIFIER_END_POINT to enable)."
-    full = " ".join(predict_str_list)
-    if extra.get("gpt_extract_answer") and extra.get("extract_answer_tags") == "strict":
-        matches = re.findall(r"<answer>\s*(.*?)\s*</answer>", full, re.DOTALL)
-        full = matches[-1].strip() if matches else (predict_str_list[-1].strip() if predict_str_list else "")
+    full = _prediction_text_for_verifier(predict_str_list, extra, final_answer=final_answer)
     query = QUERY_PROMPT.format(question=prompt, ground_truth=ground_truth, prediction=full)
     client = GPT4VisionClient()
     try:

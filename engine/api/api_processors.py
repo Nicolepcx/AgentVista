@@ -263,10 +263,17 @@ def _extract_responses_from_node(node):
     return conversation_history, assistant_responses
 
 
-def _evaluate_trajectory(question, ground_truth, conversation_history, assistant_responses, question_id):
+def _evaluate_trajectory(
+    question,
+    ground_truth,
+    conversation_history,
+    assistant_responses,
+    question_id,
+    final_answer=None,
+):
     """
     Evaluate trajectory and compute scores.
-    
+
     Returns:
         tuple: (accuracy_score, trajectory_score, trajectory_analysis, trajectory_text)
     """
@@ -291,7 +298,8 @@ def _evaluate_trajectory(question, ground_truth, conversation_history, assistant
                     prompt=question,
                     predict_str_list=assistant_responses,
                     ground_truth=ground_truth,
-                    extra_info=extra_info
+                    extra_info=extra_info,
+                    final_answer=final_answer,
                 )
                 trajectory_score = accuracy_score
                 trajectory_analysis = analysis if analysis else "Evaluation completed using general_qa_tool."
@@ -468,7 +476,12 @@ def _process_single_sample_unified(sample, args, sampling_params, trajectory_id=
     # Extract responses and evaluate
     conversation_history, assistant_responses = _extract_responses_from_node(final_node)
     accuracy_score, trajectory_score, trajectory_analysis, trajectory_text = _evaluate_trajectory(
-        question_text, ground_truth, conversation_history, assistant_responses, question_id
+        question_text,
+        ground_truth,
+        conversation_history,
+        assistant_responses,
+        question_id,
+        final_answer=final_answer,
     )
     
     # Build result dict
